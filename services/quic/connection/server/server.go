@@ -125,6 +125,12 @@ func (s *QuicServer) listenAndServeQUIC(ctx context.Context, tlsc *tls.Config) (
 		return fmt.Errorf("failed to listen for quic connection %w", err)
 	}
 
+	defer func() {
+		if closeErr := s.listener.Close(); closeErr != nil {
+			log.Error().Err(closeErr).Msg("Failed to close QUIC listener")
+		}
+	}()
+
 	for {
 		select {
 		case <-ctx.Done():
