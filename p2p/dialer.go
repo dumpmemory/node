@@ -175,6 +175,11 @@ func (m *dialer) Dial(ctx context.Context, consumerID, providerID identity.Ident
 	var channel communicationChannel
 	if serviceType == "quic_scraping" {
 		channel = newChannelQuic(conn1, providerID, config.compatibility)
+		channel.setUpnpPortsRelease(func() {
+			if err := quicServer.Close(); err != nil {
+				log.Error().Err(err).Msg("Failed to close QUIC server")
+			}
+		})
 	} else {
 		channel, err = newChannel(conn1, config.privateKey, config.peerPubKey, config.compatibility)
 		if err != nil {

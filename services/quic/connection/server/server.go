@@ -74,6 +74,40 @@ func (s *QuicServer) Start(ctx context.Context) error {
 	return nil
 }
 
+func (s *QuicServer) Close() error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	var errs []error
+
+	if s.listener != nil {
+		if err := s.listener.Close(); err != nil {
+			errs = append(errs, fmt.Errorf("failed to close listener: %w", err))
+		}
+		s.listener = nil
+	}
+
+	if s.communicationConn != nil {
+		if err := s.communicationConn.CloseWithError(0, "server closed"); err != nil {
+			errs = append(errs, fmt.Errorf("failed to close communication connection: %w", err))
+		}
+		s.communicationConn = nil
+	}
+
+	if s.transportConn != nil {
+		if err := s.transportConn.CloseWithError(0, "server closed"); err != nil {
+			errs = append(errs, fmt.Errorf("failed to close transport connection: %w", err))
+		}
+		s.transportConn = nil
+	}
+
+	if len(errs) > 0 {
+		return fmt.Errorf("errors during QUIC server close: %v", errs)
+	}
+
+	return nil
+}
+
 // CommunicationConn returns communication connection.
 func (s *QuicServer) CommunicationConn(ctx context.Context) (*streams.QuicConnection, error) {
 	for {
@@ -124,12 +158,6 @@ func (s *QuicServer) listenAndServeQUIC(ctx context.Context, tlsc *tls.Config) (
 	if err != nil {
 		return fmt.Errorf("failed to listen for quic connection %w", err)
 	}
-
-	defer func() {
-		if closeErr := s.listener.Close(); closeErr != nil {
-			log.Error().Err(closeErr).Msg("Failed to close QUIC listener")
-		}
-	}()
 
 	for {
 		select {
