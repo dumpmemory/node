@@ -203,7 +203,7 @@ func (c *channelQuic) setPeerID(identity identity.Identity) {
 	c.id = identity
 }
 
-func (c *channelQuic) handleRequest(s quic.Stream, msg *transportMsg) {
+func (c *channelQuic) handleRequest(s *quic.Stream, msg *transportMsg) {
 	defer func() {
 		s.Close()
 		s.CancelRead(0)

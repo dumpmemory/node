@@ -27,15 +27,15 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/quic-go/quic-go"
 	"github.com/rs/zerolog/log"
 
+	qc "github.com/mysteriumnetwork/node/services/quic/quic"
 	"github.com/mysteriumnetwork/node/services/quic/streams"
 )
 
 // Server represents QUIC server.
 type Server struct {
-	transportConn quic.Connection
+	transportConn qc.Connection
 	addrServe     string
 	basicUser     string
 	basicPassword string
@@ -47,7 +47,7 @@ type Server struct {
 }
 
 // NewServer creates new QUIC server.
-func NewServer(transportConn quic.Connection, addrServe, basicUser, basicPassword string) *Server {
+func NewServer(transportConn qc.Connection, addrServe, basicUser, basicPassword string) *Server {
 	return &Server{
 		addrServe:     addrServe,
 		transportConn: transportConn,

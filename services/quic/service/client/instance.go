@@ -27,6 +27,7 @@ import (
 	"github.com/quic-go/quic-go"
 	"github.com/rs/zerolog/log"
 
+	qc "github.com/mysteriumnetwork/node/services/quic/quic"
 	"github.com/mysteriumnetwork/node/services/quic/streams"
 )
 
@@ -41,8 +42,8 @@ type client struct {
 	address string
 
 	mu                sync.RWMutex
-	communicationConn quic.Connection
-	transportConn     quic.Connection
+	communicationConn qc.Connection
+	transportConn     qc.Connection
 }
 
 // NewClient creates new QUIC client.
@@ -197,7 +198,7 @@ func (c *client) DialTransport(ctx context.Context) (*streams.QuicConnection, er
 	return &streams.QuicConnection{Connection: c.transportConn}, nil
 }
 
-func (c *client) dial(ctx context.Context, tlsConf *tls.Config) (quic.Connection, error) {
+func (c *client) dial(ctx context.Context, tlsConf *tls.Config) (qc.Connection, error) {
 	conf := quicConfig
 
 	communicationConn, err := quic.DialAddr(ctx, c.address, tlsConf, &conf)

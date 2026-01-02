@@ -29,6 +29,7 @@ import (
 	"github.com/rs/zerolog/log"
 
 	"github.com/mysteriumnetwork/node/config"
+	qc "github.com/mysteriumnetwork/node/services/quic/quic"
 	"github.com/mysteriumnetwork/node/services/quic/streams"
 )
 
@@ -39,8 +40,8 @@ type QuicServer struct {
 	listener *quic.Listener
 
 	mu                sync.RWMutex
-	communicationConn quic.Connection
-	transportConn     quic.Connection
+	communicationConn qc.Connection
+	transportConn     qc.Connection
 }
 
 // NewQuicServer creates new QUIC server.
@@ -74,6 +75,7 @@ func (s *QuicServer) Start(ctx context.Context) error {
 	return nil
 }
 
+// Close closes QUIC server.
 func (s *QuicServer) Close() error {
 	s.mu.Lock()
 	defer s.mu.Unlock()

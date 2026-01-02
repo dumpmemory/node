@@ -18,13 +18,14 @@
 package streams
 
 import (
+	qc "github.com/mysteriumnetwork/node/services/quic/quic"
 	"github.com/quic-go/quic-go"
 	"github.com/rs/zerolog/log"
 )
 
 // QuicConnection represents QUIC connection.
 type QuicConnection struct {
-	quic.Connection
+	qc.Connection
 	Listener *quic.Listener
 }
 
