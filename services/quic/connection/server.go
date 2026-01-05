@@ -61,10 +61,21 @@ func (s *Server) listenAndServeRequests(ctx context.Context) (err error) {
 	if err != nil {
 		return fmt.Errorf("failed to listen on TCP address: %w", err)
 	}
+	server := &http.Server{Handler: s}
 
 	go func() {
-		if err := http.Serve(s.l, s); err != nil {
+		if err := server.Serve(s.l); err != nil && err != http.ErrServerClosed {
 			log.Error().Err(err).Msg("failed to serve HTTP")
+		}
+	}()
+
+	// Wait for context cancellation and shutdown gracefully
+	go func() {
+		<-ctx.Done()
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		if err := server.Shutdown(shutdownCtx); err != nil {
+			log.Error().Err(err).Msg("failed to shutdown HTTP server")
 		}
 	}()
 
