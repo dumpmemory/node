@@ -113,6 +113,10 @@ func (m *Manager) ProvideConfig(sessionID string, sessionConfig json.RawMessage,
 		cancel() // Cancel listener context
 		statsPublisher.stop()
 
+		if err := remoteConn.Close(); err != nil {
+			log.Error().Err(err).Msg("Failed to close QUIC connection")
+		}
+
 		m.sessionCleanupMu.Lock()
 		m.sessionCleanup[sessionID] = func() {}
 		m.sessionCleanupMu.Unlock()
