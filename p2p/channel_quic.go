@@ -133,6 +133,12 @@ func (c *channelQuic) Close() error {
 		c.release()
 	}
 
+	if c.tr != nil {
+		if err := c.tr.Close(); err != nil {
+			log.Warn().Err(err).Msg("Failed to close QUIC transport connection")
+		}
+	}
+
 	err := c.conn.Close()
 	if err != nil {
 		return fmt.Errorf("failed to close QUIC connection: %w", err)

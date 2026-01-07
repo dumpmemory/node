@@ -120,7 +120,6 @@ func (s *QuicServer) CommunicationConn(ctx context.Context) (*streams.QuicConnec
 			if s.communicationConn != nil {
 				return &streams.QuicConnection{
 					Connection: s.communicationConn,
-					Listener:   s.listener,
 				}, nil
 			}
 
@@ -140,7 +139,6 @@ func (s *QuicServer) TransportConn(ctx context.Context) (*streams.QuicConnection
 			if s.transportConn != nil {
 				return &streams.QuicConnection{
 					Connection: s.transportConn,
-					Listener:   s.listener,
 				}, nil
 			}
 

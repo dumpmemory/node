@@ -76,26 +76,25 @@ func (c *client) DialCommunication(ctx context.Context) (*streams.QuicConnection
 
 		for {
 			if !active {
-				conn, err = c.dial(ctx, tlsConf)
-				if err != nil {
+				newConn, dialErr := c.dial(ctx, tlsConf)
+				if dialErr != nil {
 					select {
 					case <-ctx.Done():
-						conn.CloseWithError(100, "stopped")
-
 						return
 					default:
-						log.Warn().Err(err).Msg("Dial failed, reconnect in 5 seconds")
+						log.Warn().Err(dialErr).Msg("Dial failed, reconnect in 5 seconds")
 						time.Sleep(5 * time.Second)
 
 						continue
 					}
 				} else {
-					if conn.ConnectionState().TLS.NegotiatedProtocol != "myst-communication" {
-						conn.CloseWithError(300, "unexpected protocol")
+					if newConn.ConnectionState().TLS.NegotiatedProtocol != "myst-communication" {
+						newConn.CloseWithError(300, "unexpected protocol")
 						continue
 					}
 
 					c.mu.Lock()
+					conn = newConn
 					c.communicationConn = conn
 					c.mu.Unlock()
 
@@ -148,26 +147,25 @@ func (c *client) DialTransport(ctx context.Context) (*streams.QuicConnection, er
 
 		for {
 			if !active {
-				conn, err = c.dial(ctx, tlsConf)
-				if err != nil {
+				newConn, dialErr := c.dial(ctx, tlsConf)
+				if dialErr != nil {
 					select {
 					case <-ctx.Done():
-						conn.CloseWithError(100, "stopped")
-
 						return
 					default:
-						log.Warn().Err(err).Msg("Dial failed, reconnect in 5 seconds")
+						log.Warn().Err(dialErr).Msg("Dial failed, reconnect in 5 seconds")
 						time.Sleep(5 * time.Second)
 
 						continue
 					}
 				} else {
-					if conn.ConnectionState().TLS.NegotiatedProtocol != "myst-transport" {
-						conn.CloseWithError(300, "unexpected protocol")
+					if newConn.ConnectionState().TLS.NegotiatedProtocol != "myst-transport" {
+						newConn.CloseWithError(300, "unexpected protocol")
 						continue
 					}
 
 					c.mu.Lock()
+					conn = newConn
 					c.transportConn = conn
 					c.mu.Unlock()
 
