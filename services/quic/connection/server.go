@@ -96,11 +96,13 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if _, err := src.Write([]byte("HTTP/1.1 200 OK\r\n\r\n")); err != nil {
+		src.Close()
 		return
 	}
 
 	stream, err := s.transportConn.OpenStream()
 	if err != nil {
+		src.Close()
 		log.Error().Err(err).Msg("failed to open stream")
 		return
 	}
@@ -116,22 +118,27 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	err = req.Write(stream)
 	if err != nil {
+		src.Close()
 		log.Error().Err(err).Msg("failed to write request")
+		return
 	}
 
 	resp, err := http.ReadResponse(bufio.NewReader(stream), req)
 	if err != nil {
+		src.Close()
 		log.Error().Err(err).Msg("failed to read response")
 		return
 	}
 	defer resp.Body.Close()
 
 	if err := stream.SetDeadline(time.Time{}); err != nil {
+		src.Close()
 		log.Error().Err(err).Msg("failed to reset deadline to 0")
 		return
 	}
 
 	if resp.StatusCode != 200 {
+		src.Close()
 		log.Error().Msgf("failed to do connect handshake, status code: %s, endpoint: %s", resp.Status, r.RequestURI)
 		return
 	}

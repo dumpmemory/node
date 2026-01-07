@@ -118,9 +118,13 @@ func (m *Manager) ProvideConfig(sessionID string, sessionConfig json.RawMessage,
 		}
 
 		m.sessionCleanupMu.Lock()
-		m.sessionCleanup[sessionID] = func() {}
+		delete(m.sessionCleanup, sessionID)
 		m.sessionCleanupMu.Unlock()
 	}
+
+	m.sessionCleanupMu.Lock()
+	m.sessionCleanup[sessionID] = destroy
+	m.sessionCleanupMu.Unlock()
 
 	return &service.ConfigParams{SessionServiceConfig: nil, SessionDestroyCallback: destroy}, nil
 }
