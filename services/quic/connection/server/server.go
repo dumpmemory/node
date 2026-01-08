@@ -29,6 +29,7 @@ import (
 	"github.com/rs/zerolog/log"
 
 	"github.com/mysteriumnetwork/node/config"
+	qc "github.com/mysteriumnetwork/node/services/quic/quic"
 	"github.com/mysteriumnetwork/node/services/quic/streams"
 )
 
@@ -39,8 +40,8 @@ type QuicServer struct {
 	listener *quic.Listener
 
 	mu                sync.RWMutex
-	communicationConn quic.Connection
-	transportConn     quic.Connection
+	communicationConn qc.Connection
+	transportConn     qc.Connection
 }
 
 // NewQuicServer creates new QUIC server.
@@ -74,6 +75,41 @@ func (s *QuicServer) Start(ctx context.Context) error {
 	return nil
 }
 
+// Close closes QUIC server.
+func (s *QuicServer) Close() error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	var errs []error
+
+	if s.listener != nil {
+		if err := s.listener.Close(); err != nil {
+			errs = append(errs, fmt.Errorf("failed to close listener: %w", err))
+		}
+		s.listener = nil
+	}
+
+	if s.communicationConn != nil {
+		if err := s.communicationConn.CloseWithError(0, "server closed"); err != nil {
+			errs = append(errs, fmt.Errorf("failed to close communication connection: %w", err))
+		}
+		s.communicationConn = nil
+	}
+
+	if s.transportConn != nil {
+		if err := s.transportConn.CloseWithError(0, "server closed"); err != nil {
+			errs = append(errs, fmt.Errorf("failed to close transport connection: %w", err))
+		}
+		s.transportConn = nil
+	}
+
+	if len(errs) > 0 {
+		return fmt.Errorf("errors during QUIC server close: %v", errs)
+	}
+
+	return nil
+}
+
 // CommunicationConn returns communication connection.
 func (s *QuicServer) CommunicationConn(ctx context.Context) (*streams.QuicConnection, error) {
 	for {
@@ -84,7 +120,6 @@ func (s *QuicServer) CommunicationConn(ctx context.Context) (*streams.QuicConnec
 			if s.communicationConn != nil {
 				return &streams.QuicConnection{
 					Connection: s.communicationConn,
-					Listener:   s.listener,
 				}, nil
 			}
 
@@ -104,7 +139,6 @@ func (s *QuicServer) TransportConn(ctx context.Context) (*streams.QuicConnection
 			if s.transportConn != nil {
 				return &streams.QuicConnection{
 					Connection: s.transportConn,
-					Listener:   s.listener,
 				}, nil
 			}
 

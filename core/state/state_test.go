@@ -234,6 +234,11 @@ func Test_consumeServiceSessionEarningsEvent(t *testing.T) {
 
 	// then
 	assert.Eventually(t, func() bool {
+		if keeper == nil ||
+			len(keeper.GetState().Sessions) == 0 ||
+			keeper.GetState().Sessions[0].Tokens == nil {
+			return false
+		}
 		return keeper.GetState().Sessions[0].Tokens.Cmp(big.NewInt(0)) != 0
 	}, 2*time.Second, 10*time.Millisecond)
 	assert.Equal(
@@ -503,6 +508,11 @@ func Test_ConsumesEarningsChangeEvent(t *testing.T) {
 
 	// then
 	assert.Eventually(t, func() bool {
+		if keeper == nil ||
+			len(keeper.GetState().Identities) == 0 ||
+			keeper.GetState().Identities[0].Earnings == nil {
+			return false
+		}
 		return keeper.GetState().Identities[0].Earnings.Cmp(big.NewInt(10)) == 0 && keeper.GetState().Identities[0].EarningsTotal.Cmp(big.NewInt(100)) == 0
 	}, 2*time.Second, 10*time.Millisecond)
 	assert.Len(t, keeper.GetState().ProviderChannels, 2)

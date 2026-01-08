@@ -27,15 +27,15 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/quic-go/quic-go"
 	"github.com/rs/zerolog/log"
 
+	qc "github.com/mysteriumnetwork/node/services/quic/quic"
 	"github.com/mysteriumnetwork/node/services/quic/streams"
 )
 
 // Server represents QUIC server.
 type Server struct {
-	transportConn quic.Connection
+	transportConn qc.Connection
 	addrServe     string
 	basicUser     string
 	basicPassword string
@@ -47,7 +47,7 @@ type Server struct {
 }
 
 // NewServer creates new QUIC server.
-func NewServer(transportConn quic.Connection, addrServe, basicUser, basicPassword string) *Server {
+func NewServer(transportConn qc.Connection, addrServe, basicUser, basicPassword string) *Server {
 	return &Server{
 		addrServe:     addrServe,
 		transportConn: transportConn,
@@ -61,10 +61,21 @@ func (s *Server) listenAndServeRequests(ctx context.Context) (err error) {
 	if err != nil {
 		return fmt.Errorf("failed to listen on TCP address: %w", err)
 	}
+	server := &http.Server{Handler: s}
 
 	go func() {
-		if err := http.Serve(s.l, s); err != nil {
+		if err := server.Serve(s.l); err != nil && err != http.ErrServerClosed {
 			log.Error().Err(err).Msg("failed to serve HTTP")
+		}
+	}()
+
+	// Wait for context cancellation and shutdown gracefully
+	go func() {
+		<-ctx.Done()
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		if err := server.Shutdown(shutdownCtx); err != nil {
+			log.Error().Err(err).Msg("failed to shutdown HTTP server")
 		}
 	}()
 
@@ -85,11 +96,13 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if _, err := src.Write([]byte("HTTP/1.1 200 OK\r\n\r\n")); err != nil {
+		src.Close()
 		return
 	}
 
 	stream, err := s.transportConn.OpenStream()
 	if err != nil {
+		src.Close()
 		log.Error().Err(err).Msg("failed to open stream")
 		return
 	}
@@ -105,22 +118,27 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	err = req.Write(stream)
 	if err != nil {
+		src.Close()
 		log.Error().Err(err).Msg("failed to write request")
+		return
 	}
 
 	resp, err := http.ReadResponse(bufio.NewReader(stream), req)
 	if err != nil {
+		src.Close()
 		log.Error().Err(err).Msg("failed to read response")
 		return
 	}
 	defer resp.Body.Close()
 
 	if err := stream.SetDeadline(time.Time{}); err != nil {
+		src.Close()
 		log.Error().Err(err).Msg("failed to reset deadline to 0")
 		return
 	}
 
 	if resp.StatusCode != 200 {
+		src.Close()
 		log.Error().Msgf("failed to do connect handshake, status code: %s, endpoint: %s", resp.Status, r.RequestURI)
 		return
 	}

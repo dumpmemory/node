@@ -66,7 +66,9 @@ func TestMORQATransport_SendEvent_HandlesSuccess(t *testing.T) {
 
 	assert.Eventually(t, func() bool {
 		morqa.sendAll()
-
+		if events.Batch == nil {
+			return false
+		}
 		return len(events.Batch.Events) > 0
 	}, 2*time.Second, 10*time.Millisecond)
 

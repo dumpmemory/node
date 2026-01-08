@@ -25,12 +25,12 @@ import (
 	"sync"
 	"time"
 
-	"github.com/quic-go/quic-go"
 	"github.com/rs/zerolog/log"
 
 	node_config "github.com/mysteriumnetwork/node/config"
 	"github.com/mysteriumnetwork/node/core/connection"
 	"github.com/mysteriumnetwork/node/core/connection/connectionstate"
+	qc "github.com/mysteriumnetwork/node/services/quic/quic"
 )
 
 // Options represents connection options.
@@ -106,7 +106,7 @@ func (c *Connection) start(ctx context.Context, options connection.ConnectOption
 	addr := net.JoinHostPort("127.0.0.1", fmt.Sprintf("%d", options.Params.ProxyPort))
 
 	if options.ProviderNATConn != nil {
-		c.server = NewServer(options.ProviderNATConn.(quic.Connection), addr, node_config.GetString(node_config.FlagQUICLogin), node_config.GetString(node_config.FlagQUICPassword))
+		c.server = NewServer(options.ProviderNATConn.(qc.Connection), addr, node_config.GetString(node_config.FlagQUICLogin), node_config.GetString(node_config.FlagQUICPassword))
 		if err := c.server.listenAndServeRequests(ctx); err != nil {
 			return fmt.Errorf("failed to listen and serve requests: %w", err)
 		}

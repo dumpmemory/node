@@ -26,6 +26,7 @@ import (
 	"github.com/quic-go/quic-go"
 	"github.com/rs/zerolog/log"
 
+	qc "github.com/mysteriumnetwork/node/services/quic/quic"
 	"github.com/mysteriumnetwork/node/services/quic/streams"
 )
 
@@ -36,7 +37,7 @@ var (
 
 type listener struct {
 	ctx context.Context
-	c   quic.Connection
+	c   qc.Connection
 }
 
 func (l *listener) Accept() (net.Conn, error) {
@@ -61,7 +62,7 @@ func (l *listener) Addr() net.Addr {
 }
 
 type conn struct {
-	quic.Stream
+	*quic.Stream
 	local, remote net.Addr
 }
 
@@ -90,18 +91,19 @@ func (c *connectServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	dst, err := net.Dial("tcp", r.RequestURI)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
-
 		return
 	}
 
 	src, _, err := w.(http.Hijacker).Hijack()
 	if err != nil {
+		dst.Close()
 		http.Error(w, err.Error(), http.StatusInternalServerError)
-
 		return
 	}
 
 	if _, err := src.Write(c.connectResponse); err != nil {
+		dst.Close()
+		src.Close()
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}

@@ -392,6 +392,9 @@ func TestConsumerBalanceTracker_RecoverGrandTotalPromisedSettledIsBiggerThanProm
 		})
 		assert.Eventually(t, func() bool {
 			savedBalance, _ := mcts.Get(1, id1, common.BigToAddress(big.NewInt(0)))
+			if savedBalance == nil {
+				return false
+			}
 			return savedBalance.Cmp(big.NewInt(6)) == 0
 		}, defaultWaitTime, defaultWaitInterval)
 	}
