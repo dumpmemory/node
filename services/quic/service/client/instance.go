@@ -66,6 +66,7 @@ func (c *client) DialCommunication(ctx context.Context) (*streams.QuicConnection
 	}
 
 	if conn.ConnectionState().TLS.NegotiatedProtocol != "myst-communication" {
+		conn.CloseWithError(300, "unexpected protocol")
 		return nil, fmt.Errorf("unexpected protocol: %s", conn.ConnectionState().TLS.NegotiatedProtocol)
 	}
 
@@ -137,6 +138,7 @@ func (c *client) DialTransport(ctx context.Context) (*streams.QuicConnection, er
 	}
 
 	if conn.ConnectionState().TLS.NegotiatedProtocol != "myst-transport" {
+		conn.CloseWithError(300, "unexpected protocol")
 		return nil, fmt.Errorf("unexpected protocol: %s", conn.ConnectionState().TLS.NegotiatedProtocol)
 	}
 

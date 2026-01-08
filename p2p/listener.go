@@ -212,6 +212,7 @@ func (m *listener) Listen(providerID identity.Identity, serviceType string, chan
 
 				conn2, err = client.DialTransport(ctx)
 				if err != nil {
+					conn1.Close()
 					log.Err(err).Msg("Could not dial myst-transport")
 					cancel()
 					return
