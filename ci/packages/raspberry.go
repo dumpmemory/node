@@ -102,6 +102,9 @@ func configureRaspbianImage(raspbianImagePath string) error {
 	if err := shell.NewCmd("sudo apt-get install -y qemu-system qemu-user-static binfmt-support systemd-container").RunWith(envs); err != nil {
 		return err
 	}
+	if err := shell.NewCmd("sudo systemctl restart systemd-binfmt").Run(); err != nil {
+		return err
+	}
 	loopDevice, err := device.AttachLoop(raspbianImagePath)
 	if err != nil {
 		return err

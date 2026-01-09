@@ -406,6 +406,10 @@ func packageDebian(binaryPath, arch string) error {
 		"BINARY": binaryPath,
 	}
 
+	if gopath, _ := sh.Output("go", "env", "GOPATH"); gopath != "" {
+		envs["PATH"] = fmt.Sprintf("%s:%s/bin", os.Getenv("PATH"), gopath)
+	}
+
 	if err := deb.TermsTemplateFile("bin/package/installation/templates"); err != nil {
 		return err
 	}

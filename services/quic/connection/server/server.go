@@ -159,6 +159,16 @@ func (s *QuicServer) listenAndServeQUIC(ctx context.Context, tlsc *tls.Config) (
 		return fmt.Errorf("failed to listen for quic connection %w", err)
 	}
 
+	// Ensure listener is closed when context is cancelled
+	defer func() {
+		s.mu.Lock()
+		defer s.mu.Unlock()
+		if s.listener != nil {
+			s.listener.Close()
+			s.listener = nil
+		}
+	}()
+
 	for {
 		select {
 		case <-ctx.Done():
@@ -166,8 +176,14 @@ func (s *QuicServer) listenAndServeQUIC(ctx context.Context, tlsc *tls.Config) (
 		default:
 			c, err := s.listener.Accept(ctx)
 			if err != nil {
+				s.mu.RLock()
+				listenerClosed := s.listener == nil
+				s.mu.RUnlock()
+				if listenerClosed {
+					log.Debug().Msg("QUIC listener closed, exiting accept loop")
+					return nil
+				}
 				log.Error().Err(err).Msg("failed to accept QUIC connection")
-
 				continue
 			}
 
@@ -175,9 +191,17 @@ func (s *QuicServer) listenAndServeQUIC(ctx context.Context, tlsc *tls.Config) (
 			switch c.ConnectionState().TLS.NegotiatedProtocol {
 			case "myst-communication":
 				log.Info().Msg("Setting communication connection")
+				if s.communicationConn != nil {
+					log.Warn().Msg("Closing old communication connection before replacing")
+					s.communicationConn.CloseWithError(0, "replaced by new connection")
+				}
 				s.communicationConn = c
 			case "myst-transport":
 				log.Info().Msg("Setting transport connection")
+				if s.transportConn != nil {
+					log.Warn().Msg("Closing old transport connection before replacing")
+					s.transportConn.CloseWithError(0, "replaced by new connection")
+				}
 				s.transportConn = c
 			}
 			s.mu.Unlock()
