@@ -99,7 +99,7 @@ func configureRaspbianImage(raspbianImagePath string) error {
 	if err := shell.NewCmd("sudo apt-get update").Run(); err != nil {
 		return err
 	}
-	if err := shell.NewCmd("sudo apt-get install -y qemu-system qemu-user-static binfmt-support systemd-container").RunWith(envs); err != nil {
+	if err := shell.NewCmd("sudo apt-get install -y openssl qemu-system qemu-user-static binfmt-support systemd-container").RunWith(envs); err != nil {
 		return err
 	}
 	if err := shell.NewCmd("sudo systemctl restart systemd-binfmt").Run(); err != nil {
@@ -172,7 +172,7 @@ func fetchRaspbianImage() (filename string, err error) {
 
 	log.Info().Msg("Looking up Raspbian image file")
 	localRaspbianZip, err := storageClient.GetCacheableFile("raspbian", func(object types.Object) bool {
-		return strings.Contains(aws.ToString(object.Key), "-raspbian-buster-lite")
+		return strings.Contains(aws.ToString(object.Key), "-raspios-trixie-armhf-lite.img.zip")
 	})
 	if err != nil {
 		return "", fmt.Errorf("failed to fetch raspbian image: %w", err)

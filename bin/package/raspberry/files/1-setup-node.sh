@@ -10,31 +10,33 @@ add_apt_source() {
   grep -qF "$src" "$src_file" || echo "$src" | tee -a "$src_file"
 }
 
-# Enable SSH access
-touch /boot/ssh
-
-# Add APT sources
-add_apt_source "deb http://ppa.launchpad.net/mysteriumnetwork/node/ubuntu focal main" "/etc/apt/sources.list.d/mysterium.list"
-apt-key adv --keyserver keyserver.ubuntu.com --recv-keys ECCB6A56B22C536D
-
-add_apt_source "deb http://deb.debian.org/debian/ unstable main" "/etc/apt/sources.list.d/unstable.list"
-wget -O - https://ftp-master.debian.org/keys/archive-key-$(lsb_release -sr).asc | sudo apt-key add -
-printf 'Package: *\nPin: release a=unstable\nPin-Priority: 150\n' | sudo tee --append /etc/apt/preferences.d/limit-unstable
-
-# Import missing keys
-apt-key adv --keyserver keyserver.ubuntu.com --recv-keys 0E98404D386FA1D9
-apt-key adv --keyserver keyserver.ubuntu.com --recv-keys 6ED0E7B82643E131
-
 apt-get update --allow-releaseinfo-change
 
 # Install myst dependencies
-apt-get -y install \
-  wireguard \
-  openvpn
+apt-get -y install wireguard openvpn iptables resolvconf wget gpg unattended-upgrades
+  
+# Enable SSH access
+touch /boot/ssh
+
+# TODO: remove PPA https://wiki.debian.org/DontBreakDebian
+wget -qO- "https://keyserver.ubuntu.com/pks/lookup?op=get&search=0xECCB6A56B22C536D" \
+| gpg --dearmor \
+| tee /usr/share/keyrings/mysterium-ppa.gpg > /dev/null
+
+echo "deb [signed-by=/usr/share/keyrings/mysterium-ppa.gpg] \
+http://ppa.launchpad.net/mysteriumnetwork/node/ubuntu focal main" \
+| tee /etc/apt/sources.list.d/mysterium-node.list
+
+# Add APT sources
+# add_apt_source "deb http://deb.debian.org/debian/ unstable main" "/etc/apt/sources.list.d/unstable.list"
+# wget -O - https://ftp-master.debian.org/keys/archive-key-$(lsb_release -sr).asc | sudo apt-key add -
+# printf 'Package: *\nPin: release a=unstable\nPin-Priority: 150\n' | sudo tee --append /etc/apt/preferences.d/limit-unstable
+
+# Import missing keys
+# apt-key adv --keyserver keyserver.ubuntu.com --recv-keys 0E98404D386FA1D9
+# apt-key adv --keyserver keyserver.ubuntu.com --recv-keys 6ED0E7B82643E131
 
 # Setup unattended upgrades
-apt-get -y install \
-  unattended-upgrades
 if [[ "${RELEASE_BUILD}" == "true" ]]; then
   echo "Release build, setting up auto-update"
   install --mode=644 unattended-upgrades /etc/apt/apt.conf.d/50unattended-upgrades

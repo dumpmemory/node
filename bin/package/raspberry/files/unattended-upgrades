@@ -1,6 +1,7 @@
 Unattended-Upgrade::Origins-Pattern {
-        "origin=Raspbian,codename=${distro_codename},label=Raspbian";
-        "origin=Raspbian,codename=${distro_codename},label=Raspbian-Security";
+        "origin=Debian,codename=${distro_codename}";
+        "origin=Debian,label=Debian-Security";
+        "origin=Raspberry Pi Foundation";
         "o=LP-PPA-mysteriumnetwork-node";
 };
 
