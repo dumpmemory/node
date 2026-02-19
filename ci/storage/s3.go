@@ -44,7 +44,7 @@ type Storage struct {
 
 var cacheDir string
 
-const cacheDirPermissions = 0700
+const cacheDirPermissions = 0o700
 
 func init() {
 	var err error
@@ -74,7 +74,6 @@ func NewClient() (*Storage, error) {
 		context.TODO(),
 		config.WithEndpointResolver(customResolver),
 	)
-
 	if err != nil {
 		return nil, err
 	}
@@ -181,6 +180,11 @@ func RemoveBucket() error {
 	if err != nil {
 		return err
 	}
+	// First, remove all objects from the bucket
+	if err := sh.RunV("bin/s3", "rm", url, "--recursive"); err != nil {
+		return err
+	}
+	// Then remove the empty bucket
 	return sh.RunV("bin/s3", "rb", "--force", url)
 }
 
