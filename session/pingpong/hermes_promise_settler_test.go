@@ -61,6 +61,7 @@ func TestPromiseSettler_loadInitialState(t *testing.T) {
 		&mockProviderChannelStatusProvider{},
 		mrsp,
 		ks,
+		&mockCurrentIdentity{},
 		&settlementHistoryStorageMock{},
 		&mockPublisher{},
 		&mockObserver{},
@@ -140,6 +141,7 @@ func TestPromiseSettler_handleRegistrationEvent(t *testing.T) {
 		&mockProviderChannelStatusProvider{},
 		mrsp,
 		ks,
+		&mockCurrentIdentity{},
 		&settlementHistoryStorageMock{},
 		&mockPublisher{},
 		&mockObserver{},
@@ -188,7 +190,7 @@ func TestPromiseSettler_handleHermesPromiseReceived(t *testing.T) {
 	}
 	lbs := newMockAddressStorage()
 
-	settler := NewHermesPromiseSettler(tm, &mockHermesPromiseStorage{}, &mockPayAndSettler{}, &mockAddressProvider{}, fac.Get, &mockHermesURLGetter{}, channelProvider, channelStatusProvider, mrsp, ks, &settlementHistoryStorageMock{}, &mockPublisher{}, &mockObserver{}, lbs, cfg)
+	settler := NewHermesPromiseSettler(tm, &mockHermesPromiseStorage{}, &mockPayAndSettler{}, &mockAddressProvider{}, fac.Get, &mockHermesURLGetter{}, channelProvider, channelStatusProvider, mrsp, ks, &mockCurrentIdentity{}, &settlementHistoryStorageMock{}, &mockPublisher{}, &mockObserver{}, lbs, cfg)
 
 	// no receive on unknown provider
 	channelProvider.channelToReturn = NewHermesChannel("1", mockID, hermesID, mockProviderChannel, HermesPromise{}, beneficiaryID)
@@ -266,7 +268,7 @@ func TestPromiseSettler_handleHermesPromiseReceivedWithLocalBeneficiary(t *testi
 	}
 	lbs := newMockAddressStorage()
 
-	settler := NewHermesPromiseSettler(tm, &mockHermesPromiseStorage{}, &mockPayAndSettler{}, &mockAddressProvider{}, fac.Get, &mockHermesURLGetter{}, channelProvider, channelStatusProvider, mrsp, ks, &settlementHistoryStorageMock{}, &mockPublisher{}, &mockObserver{}, lbs, cfg)
+	settler := NewHermesPromiseSettler(tm, &mockHermesPromiseStorage{}, &mockPayAndSettler{}, &mockAddressProvider{}, fac.Get, &mockHermesURLGetter{}, channelProvider, channelStatusProvider, mrsp, ks, &mockCurrentIdentity{}, &settlementHistoryStorageMock{}, &mockPublisher{}, &mockObserver{}, lbs, cfg)
 
 	expectedChannel := client.ProviderChannel{Stake: big.NewInt(1000)}
 	expectedPromise := crypto.Promise{Amount: units.FloatEthToBigIntWei(6)}
@@ -319,7 +321,7 @@ func TestPromiseSettler_doNotSettleIfBeneficiaryIsAChannel(t *testing.T) {
 	lbs := newMockAddressStorage()
 
 	mockAddressProvider := newMockAddressProvider()
-	settler := NewHermesPromiseSettler(tm, &mockHermesPromiseStorage{}, &mockPayAndSettler{}, mockAddressProvider, fac.Get, &mockHermesURLGetter{}, channelProvider, channelStatusProvider, mrsp, ks, &settlementHistoryStorageMock{}, &mockPublisher{}, &mockObserver{}, lbs, cfg)
+	settler := NewHermesPromiseSettler(tm, &mockHermesPromiseStorage{}, &mockPayAndSettler{}, mockAddressProvider, fac.Get, &mockHermesURLGetter{}, channelProvider, channelStatusProvider, mrsp, ks, &mockCurrentIdentity{}, &settlementHistoryStorageMock{}, &mockPublisher{}, &mockObserver{}, lbs, cfg)
 
 	expectedChannel := client.ProviderChannel{Stake: big.NewInt(1000)}
 	expectedPromise := crypto.Promise{Amount: units.FloatEthToBigIntWei(6)}
@@ -394,6 +396,7 @@ func TestPromiseSettler_handleNodeStart(t *testing.T) {
 		&mockProviderChannelStatusProvider{},
 		mrsp,
 		ks,
+		&mockCurrentIdentity{},
 		&settlementHistoryStorageMock{},
 		&mockPublisher{},
 		&mockObserver{},
