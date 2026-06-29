@@ -1399,6 +1399,7 @@ func (aps *hermesPromiseSettler) resyncActiveChannel(chainID int64) {
 	}
 
 	for _, h := range chainHermeses {
+		log.Info().Msgf("Attempting channel Fetch (periodic resync) for provider %v, hermesID %v, chainID %d", id, h.HermesAddress.Hex(), chainID)
 		if _, err := aps.channelProvider.Fetch(chainID, id, h.HermesAddress); err != nil && !errors.Is(err, ErrNotFound) {
 			log.Error().Err(err).Msgf("could not resync channel for provider %v, hermes %v", id, h.HermesAddress.Hex())
 		}
