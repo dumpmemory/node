@@ -329,6 +329,45 @@ func Test_SettleHistory(t *testing.T) {
 			resp.Body.String(),
 		)
 	})
+	t.Run("does not panic on a withdrawal entry with nil amount", func(t *testing.T) {
+		// A withdrawal whose transactor queue reported "error" is stored with no Amount (nil).
+		// The withdrawal-total sum must not nil-deref panic / 500 the endpoint.
+		mockStorage := &settlementHistoryProviderMock{settlementHistoryToReturn: []pingpong.SettlementHistoryEntry{
+			{
+				TxHash:       common.HexToHash("0x88af51047ff2da1e3626722fe239f70c3ddd668f067b2ac8d67b280d2eff39f7"),
+				Time:         time.Date(2020, 1, 2, 3, 4, 5, 0, time.UTC),
+				Amount:       big.NewInt(123),
+				IsWithdrawal: true,
+			},
+			{
+				// failed withdrawal: no Amount, error set
+				Time:         time.Date(2020, 6, 7, 8, 9, 10, 0, time.UTC),
+				Amount:       nil,
+				Error:        "transactor reported queue error",
+				IsWithdrawal: true,
+			},
+		}}
+
+		server := newTestTransactorServer(http.StatusAccepted, "")
+		defer server.Close()
+
+		router := summonTestGin()
+		tr := registry.NewTransactor(requests.NewHTTPClient(server.URL, requests.DefaultTimeout), server.URL, &mockAddressProvider{}, fakeSignerFactory, mocks.NewEventBus(), nil, time.Minute)
+		a := registry.NewAffiliator(requests.NewHTTPClient(server.URL, requests.DefaultTimeout), server.URL)
+		err := AddRoutesForTransactor(mockIdentityRegistryInstance, tr, a, nil, mockStorage, &mockAddressProvider{}, nil, nil, nil)(router)
+		assert.NoError(t, err)
+
+		req, err := http.NewRequest(http.MethodGet, "/transactor/settle/history", nil)
+		assert.Nil(t, err)
+
+		resp := httptest.NewRecorder()
+		router.ServeHTTP(resp, req)
+
+		assert.Equal(t, http.StatusOK, resp.Code)
+		// nil amount treated as 0; only the valid 123 withdrawal contributes.
+		assert.Contains(t, resp.Body.String(), `"withdrawal_total":"123"`)
+		assert.Contains(t, resp.Body.String(), `"amount":null`)
+	})
 	t.Run("respects filters", func(t *testing.T) {
 		mockStorage := &settlementHistoryProviderMock{}
 
