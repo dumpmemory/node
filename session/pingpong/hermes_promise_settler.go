@@ -24,6 +24,7 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
+	mrand "math/rand/v2"
 	"strings"
 	"sync"
 	"time"
@@ -69,6 +70,12 @@ type paySettler interface {
 type ks interface {
 	Accounts() []accounts.Account
 	SignHash(a accounts.Account, hash []byte) ([]byte, error)
+}
+
+// currentIdentityProvider yields the single active (unlocked) identity in effect for this
+// runtime. Used to scope background channel resync to the one identity that is actually in use.
+type currentIdentityProvider interface {
+	GetUnlockedIdentity() (identity.Identity, bool)
 }
 
 type registrationStatusProvider interface {
@@ -121,6 +128,7 @@ type hermesPromiseSettler struct {
 	lock                       sync.RWMutex
 	registrationStatusProvider registrationStatusProvider
 	ks                         ks
+	currentIdentity            currentIdentityProvider
 	transactor                 transactor
 	channelProvider            hermesChannelProvider
 	settlementHistoryStorage   settlementHistoryStorage
@@ -171,15 +179,22 @@ type HermesPromiseSettlerConfig struct {
 	SettlementCheckInterval time.Duration
 	SettlementCheckTimeout  time.Duration
 	BalanceThreshold        float64
+	ChannelResyncInterval   time.Duration
 }
 
 var errFeeNotCovered = errors.New("fee not covered, cannot continue")
 
+// defaultChannelResyncInterval is used when ChannelResyncInterval is unset. It bounds how
+// stale the local channel balance (and thus the UI UnsettledBalance) can get while settlement
+// is unavailable, e.g. when Hermes is rate-limiting the node.
+const defaultChannelResyncInterval = 15 * time.Minute
+
 // NewHermesPromiseSettler creates a new instance of hermes promise settler.
-func NewHermesPromiseSettler(transactor transactor, promiseStorage promiseStorage, paySettler paySettler, addressProvider addressProvider, hermesCallerFactory HermesCallerFactory, hermesURLGetter hermesURLGetter, channelProvider hermesChannelProvider, providerChannelStatusProvider providerChannelStatusProvider, registrationStatusProvider registrationStatusProvider, ks ks, settlementHistoryStorage settlementHistoryStorage, publisher eventbus.Publisher, observerApi observerApi, beneficiaryLocalStorage beneficiary.BeneficiaryStorage, config HermesPromiseSettlerConfig) *hermesPromiseSettler {
+func NewHermesPromiseSettler(transactor transactor, promiseStorage promiseStorage, paySettler paySettler, addressProvider addressProvider, hermesCallerFactory HermesCallerFactory, hermesURLGetter hermesURLGetter, channelProvider hermesChannelProvider, providerChannelStatusProvider providerChannelStatusProvider, registrationStatusProvider registrationStatusProvider, ks ks, currentIdentity currentIdentityProvider, settlementHistoryStorage settlementHistoryStorage, publisher eventbus.Publisher, observerApi observerApi, beneficiaryLocalStorage beneficiary.BeneficiaryStorage, config HermesPromiseSettlerConfig) *hermesPromiseSettler {
 	return &hermesPromiseSettler{
 		bc:                         providerChannelStatusProvider,
 		ks:                         ks,
+		currentIdentity:            currentIdentity,
 		registrationStatusProvider: registrationStatusProvider,
 		config:                     config,
 		currentState:               make(map[identity.Identity]settlementState),
@@ -1295,6 +1310,7 @@ func (aps *hermesPromiseSettler) setSettling(id identity.Identity, hermesID comm
 
 func (aps *hermesPromiseSettler) handleNodeStart() {
 	go aps.listenForSettlementRequests()
+	go aps.runChannelResync()
 
 	for _, v := range aps.ks.Accounts() {
 		addr := identity.FromAddress(v.Address.Hex())
@@ -1308,6 +1324,85 @@ func (aps *hermesPromiseSettler) handleNodeStart() {
 				log.Error().Err(err).Msgf("could not settle inactive hermeses %v", addr)
 			}
 		}(addr)
+	}
+}
+
+// runChannelResync periodically refreshes the local channel state for the active identity,
+// decoupled from the settlement flow. This keeps Channel.Settled (and therefore the UI
+// UnsettledBalance) in sync with on-chain payouts even when the node cannot settle, e.g. while
+// Hermes is rate-limiting settlement requests.
+//
+// The interval is floored at defaultChannelResyncInterval and jittered to avoid a fleet-wide
+// stampede: a random initial phase offset spreads nodes that started in sync (deploy/restart),
+// and each subsequent tick adds jitter so they do not re-converge.
+func (aps *hermesPromiseSettler) runChannelResync() {
+	interval := clampResyncInterval(aps.config.ChannelResyncInterval)
+
+	// Random initial phase offset in [0, interval) so a synchronized fleet does not all fire at once.
+	timer := time.NewTimer(time.Duration(mrand.Int64N(int64(interval))))
+	defer timer.Stop()
+
+	for {
+		select {
+		case <-aps.stop:
+			return
+		case <-timer.C:
+			aps.resyncActiveChannel(aps.chainID())
+			// Jittered next tick, always >= interval (>= 15m floor).
+			timer.Reset(interval + time.Duration(mrand.Int64N(int64(interval/2))))
+		}
+	}
+}
+
+// clampResyncInterval enforces the hard floor: the channel resync interval can never be less
+// than defaultChannelResyncInterval, regardless of configuration. This protects shared infra
+// (Hermes / blockchain RPC) from being hammered by a large fleet of nodes.
+func clampResyncInterval(d time.Duration) time.Duration {
+	if d < defaultChannelResyncInterval {
+		return defaultChannelResyncInterval
+	}
+	return d
+}
+
+// resyncActiveChannel fetches the latest channel state from the blockchain for the single
+// active (unlocked) identity against the active hermes(es). Multi-identity is legacy; exactly
+// one identity is in effect per runtime. It is intentionally independent of the settlement flow
+// so balance state stays correct even when settlement is failing.
+func (aps *hermesPromiseSettler) resyncActiveChannel(chainID int64) {
+	id, ok := aps.currentIdentity.GetUnlockedIdentity()
+	if !ok {
+		return
+	}
+
+	aps.lock.RLock()
+	registered := aps.currentState[id].registered
+	aps.lock.RUnlock()
+	if !registered {
+		return
+	}
+
+	active := true
+	approved := true
+	hermeses, err := aps.observerApi.GetHermeses(&observer.HermesFilter{
+		Active:   &active,
+		Approved: &approved,
+	})
+	if err != nil {
+		log.Error().Err(err).Msg("could not get active hermeses for channel resync")
+		return
+	}
+
+	chainHermeses, ok := hermeses[chainID]
+	if !ok || len(chainHermeses) == 0 {
+		log.Debug().Msgf("no active hermeses found for chain %d, skipping channel resync", chainID)
+		return
+	}
+
+	for _, h := range chainHermeses {
+		log.Info().Msgf("Attempting channel Fetch (periodic resync) for provider %v, hermesID %v, chainID %d", id, h.HermesAddress.Hex(), chainID)
+		if _, err := aps.channelProvider.Fetch(chainID, id, h.HermesAddress); err != nil && !errors.Is(err, ErrNotFound) {
+			log.Error().Err(err).Msgf("could not resync channel for provider %v, hermes %v", id, h.HermesAddress.Hex())
+		}
 	}
 }
 

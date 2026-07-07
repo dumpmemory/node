@@ -444,7 +444,9 @@ func (te *transactorEndpoint) SettlementHistory(c *gin.Context) {
 
 	withdrawalTotal := big.NewInt(0)
 	for _, s := range settlementsAll {
-		if s.IsWithdrawal {
+		// Amount can be nil for failed entries (e.g. a withdrawal the transactor queue reported as
+		// errored, stored with no amount). Guard against it to avoid a nil-deref panic on big.Int.Add.
+		if s.IsWithdrawal && s.Amount != nil {
 			withdrawalTotal.Add(withdrawalTotal, s.Amount)
 		}
 	}
